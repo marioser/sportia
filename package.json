@@ -1,0 +1,23 @@
+{
+  "name": "sportia",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plataforma de Gestión Deportiva y Análisis de Rendimiento",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter @sportia/web dev",
+    "dev:api": "pnpm --filter @sportia/api dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter @sportia/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "keywords": [
+    "sports",
+    "swimming",
+    "analytics",
+    "performance"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}

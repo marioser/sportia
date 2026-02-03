@@ -1,0 +1,111 @@
+name: Auto Deploy to CapRover
+
+# Dispara cuando hay push a main con tags especiales en el commit
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Detectar qué cambió
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      api: ${{ steps.filter.outputs.api }}
+      deploy_web: ${{ steps.check.outputs.deploy_web }}
+      deploy_api: ${{ steps.check.outputs.deploy_api }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'infra/docker/Dockerfile.web'
+            api:
+              - 'apps/api/**'
+              - 'infra/docker/Dockerfile.api'
+
+      - name: Check commit message
+        id: check
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+
+          # Verificar tags en commit
+          if [[ "$COMMIT_MSG" == *"[deploy-web]"* ]] || [[ "$COMMIT_MSG" == *"[deploy-all]"* ]]; then
+            echo "deploy_web=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_web=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [[ "$COMMIT_MSG" == *"[deploy-api]"* ]] || [[ "$COMMIT_MSG" == *"[deploy-all]"* ]]; then
+            echo "deploy_api=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_api=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Desplegar Web
+  deploy-web:
+    needs: detect-changes
+    # Solo si hay cambios en web Y tag [deploy-web] o [deploy-all]
+    if: |
+      needs.detect-changes.outputs.web == 'true' &&
+      needs.detect-changes.outputs.deploy_web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Merge to deploy/web
+        run: |
+          git fetch origin deploy/web
+          git checkout deploy/web
+          git merge main --no-edit -m "ci: Auto-merge from main [skip ci]"
+          git push origin deploy/web
+
+      - name: Success notification
+        run: |
+          echo "✅ Web desplegada a CapRover via webhook"
+          echo "Branch: deploy/web"
+          echo "Commit: ${{ github.sha }}"
+
+  # Desplegar API
+  deploy-api:
+    needs: detect-changes
+    # Solo si hay cambios en api Y tag [deploy-api] o [deploy-all]
+    if: |
+      needs.detect-changes.outputs.api == 'true' &&
+      needs.detect-changes.outputs.deploy_api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Merge to deploy/api
+        run: |
+          git fetch origin deploy/api
+          git checkout deploy/api
+          git merge main --no-edit -m "ci: Auto-merge from main [skip ci]"
+          git push origin deploy/api
+
+      - name: Success notification
+        run: |
+          echo "✅ API desplegada a CapRover via webhook"
+          echo "Branch: deploy/api"
+          echo "Commit: ${{ github.sha }}"

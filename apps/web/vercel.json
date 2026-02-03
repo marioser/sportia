@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": ".output/public",
+  "framework": "nuxtjs",
+  "regions": ["iad1"],
+  "functions": {
+    "**/*": {
+      "maxDuration": 30
+    }
+  }
+}

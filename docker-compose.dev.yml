@@ -1,0 +1,10 @@
+services:
+  cache:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly_data:/data
+
+volumes:
+  dragonfly_data:
