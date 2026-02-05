@@ -31,22 +31,42 @@ const loadResults = async () => {
   loading.value = true
 
   try {
-    // Query results linked to this athlete
+    // Query results linked to this athlete, ordered by date
     const { data, error } = await supabase
       .from('swim_competition_results')
       .select('*')
       .eq('athlete_id', props.athleteId)
-      .order('distance_m')
-      .order('stroke')
-      .order('final_time_ms')
+      .order('event_date', { ascending: true }) // Oldest first
       .limit(200)
 
     if (error) throw error
 
-    // Group by event and find best times
-    const eventsMap = new Map<string, any>()
+    // Calculate seed times (best previous time for each result)
+    const resultsWithSeed = []
+    const bestTimesByEvent = new Map<string, number>()
 
     for (const result of data || []) {
+      const eventKey = `${result.distance_m}_${result.stroke}`
+      const currentBest = bestTimesByEvent.get(eventKey)
+
+      // Seed time is the best time before this competition
+      const seedTime = currentBest || null
+
+      resultsWithSeed.push({
+        ...result,
+        seed_time_ms: seedTime
+      })
+
+      // Update best time for this event
+      if (!currentBest || result.final_time_ms < currentBest) {
+        bestTimesByEvent.set(eventKey, result.final_time_ms)
+      }
+    }
+
+    // Group by event for best times display
+    const eventsMap = new Map<string, any>()
+
+    for (const result of resultsWithSeed) {
       const eventKey = `${result.distance_m}_${result.stroke}`
 
       if (!eventsMap.has(eventKey)) {
@@ -68,7 +88,9 @@ const loadResults = async () => {
     }
 
     events.value = Array.from(eventsMap.values())
-    allResults.value = data || []
+
+    // Reverse to show newest first in the list
+    allResults.value = resultsWithSeed.reverse()
   } catch (e) {
     console.error(e)
     showError('Error obteniendo resultados de competencia')
@@ -131,22 +153,33 @@ const displayResults = computed(() =>
         <div
           v-for="result in displayResults"
           :key="result.id"
-          class="flex items-center justify-between p-2 border-b border-gray-100 dark:border-slate-700 last:border-0"
+          class="p-3 border-b border-gray-100 dark:border-slate-700 last:border-0"
         >
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-gray-900 dark:text-slate-100">
-              {{ formatEvent(result.distance_m, result.stroke) }}
+          <div class="flex items-start justify-between">
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-gray-900 dark:text-slate-100">
+                {{ formatEvent(result.distance_m, result.stroke) }}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-slate-400 truncate">
+                {{ result.tournament_name }}
+              </div>
+              <div class="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                {{ result.event_date ? new Date(result.event_date).toLocaleDateString('es-ES') : '' }}
+              </div>
             </div>
-            <div class="text-xs text-gray-500 dark:text-slate-400 truncate">
-              {{ result.tournament_name }}
-            </div>
-          </div>
-          <div class="text-right ml-2">
-            <span class="font-mono text-sm font-medium">
-              {{ msToTimeString(result.final_time_ms) }}
-            </span>
-            <div v-if="result.rank" class="text-xs text-gray-400 dark:text-slate-500">
-              Pos: {{ result.rank }}
+            <div class="text-right ml-2">
+              <div class="font-mono text-sm font-medium text-gray-900 dark:text-slate-100">
+                {{ msToTimeString(result.final_time_ms) }}
+              </div>
+              <div v-if="result.seed_time_ms" class="text-xs text-gray-500 dark:text-slate-400">
+                Semilla: {{ msToTimeString(result.seed_time_ms) }}
+              </div>
+              <div v-else class="text-xs text-gray-400 dark:text-slate-500">
+                Semilla: ---
+              </div>
+              <div v-if="result.seed_time_ms" class="text-xs" :class="result.final_time_ms < result.seed_time_ms ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'">
+                {{ result.final_time_ms < result.seed_time_ms ? '-' : '+' }}{{ Math.abs((result.final_time_ms - result.seed_time_ms) / 1000).toFixed(2) }}s
+              </div>
             </div>
           </div>
         </div>
