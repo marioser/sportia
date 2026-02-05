@@ -320,6 +320,8 @@ metric: 32px (números/tiempos grandes)
 - [x] Sistema de medallas/badges (gamificación)
 - [x] Auto-asignación de medallas via trigger
 - [x] Búsqueda de resultados de competencias (FECNA)
+- [x] Sincronización automática de resultados de competencias desde FECNA
+- [x] Importación de todos los resultados históricos (no solo el mejor por año)
 
 ### Pendiente (Fase 4)
 - [ ] Rankings por club

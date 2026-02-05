@@ -378,6 +378,19 @@ const handleInstall = async () => {
           <span class="text-sm font-medium text-amber-900 dark:text-amber-100">Matching</span>
           <span class="text-xs text-amber-600 dark:text-amber-400">Vincular atletas</span>
         </NuxtLink>
+
+        <NuxtLink
+          to="/admin/sync"
+          class="flex flex-col items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+        >
+          <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mb-2">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </div>
+          <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Sincronización</span>
+          <span class="text-xs text-blue-600 dark:text-blue-400">Competencias FECNA</span>
+        </NuxtLink>
       </div>
     </SCard>
     </ClientOnly>
