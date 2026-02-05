@@ -38,8 +38,8 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: '/login',
       callback: '/',
-      include: undefined,
-      exclude: ['/register', '/forgot-password', '/reset-password'],
+      include: ['/*'],  // Proteger todas las rutas
+      exclude: ['/login', '/register', '/forgot-password', '/reset-password'],
       cookieRedirect: true,
     },
   },
