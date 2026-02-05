@@ -46,6 +46,7 @@ export interface TimeProgressData {
   time_ms: number
   test_name: string
   session_id: string
+  type: 'training' | 'competition'
 }
 
 export interface MetricsData {
@@ -92,7 +93,10 @@ export function useCharts() {
     athleteId: string,
     testId?: number
   ): Promise<TimeProgressData[]> => {
-    let query = supabase
+    const allData: TimeProgressData[] = []
+
+    // 1. Fetch training data
+    let trainingQuery = supabase
       .from('training_sets')
       .select(`
         total_time_ms,
@@ -113,21 +117,64 @@ export function useCharts() {
       .order('training_sessions.session_date', { ascending: true })
 
     if (testId) {
-      query = query.eq('test_id', testId)
+      trainingQuery = trainingQuery.eq('test_id', testId)
     }
 
-    const { data, error } = await query
+    const { data: trainingData } = await trainingQuery
 
-    if (error || !data) return []
+    if (trainingData) {
+      allData.push(...trainingData.map((item: any) => ({
+        date: item.training_session.session_date,
+        time_ms: item.total_time_ms,
+        test_name: item.test
+          ? `${item.test.distance_m}m ${item.test.stroke}`
+          : 'Sin prueba',
+        session_id: item.training_session.id,
+        type: 'training' as const,
+      })))
+    }
 
-    return data.map((item: any) => ({
-      date: item.training_session.session_date,
-      time_ms: item.total_time_ms,
-      test_name: item.test
-        ? `${item.test.distance_m}m ${item.test.stroke}`
-        : 'Sin prueba',
-      session_id: item.training_session.id,
-    }))
+    // 2. Fetch competition results
+    let competitionQuery = supabase
+      .from('swim_competition_results')
+      .select('*')
+      .eq('athlete_id', athleteId)
+      .not('final_time_ms', 'is', null)
+      .order('event_date', { ascending: true })
+
+    // Filter by test if provided
+    if (testId) {
+      // Get test info to filter competitions
+      const { data: testInfo } = await supabase
+        .from('tests')
+        .select('distance_m, stroke')
+        .eq('id', testId)
+        .single()
+
+      if (testInfo) {
+        competitionQuery = competitionQuery
+          .eq('distance_m', testInfo.distance_m)
+          .eq('stroke', testInfo.stroke)
+      }
+    }
+
+    const { data: competitionData } = await competitionQuery
+
+    if (competitionData && competitionData.length > 0) {
+      // Add competition results
+      for (const result of competitionData) {
+        allData.push({
+          date: result.event_date,
+          time_ms: result.final_time_ms,
+          test_name: `${result.distance_m}m ${result.stroke}`,
+          session_id: result.id,
+          type: 'competition' as const,
+        })
+      }
+    }
+
+    // Sort all data by date
+    return allData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   }
 
   // Fetch swimming metrics data for an athlete
@@ -204,15 +251,79 @@ export function useCharts() {
     return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
   }
 
+  // Helper: Calculate linear regression for trend line
+  const calculateTrendLine = (data: TimeProgressData[]) => {
+    if (data.length < 2) return null
+
+    // Convert dates to numeric values (days from first date)
+    const firstDate = new Date(data[0].date).getTime()
+    const dataPoints = data.map((item) => ({
+      x: (new Date(item.date).getTime() - firstDate) / (1000 * 60 * 60 * 24), // days
+      y: item.time_ms,
+    }))
+
+    // Calculate linear regression (y = mx + b)
+    const n = dataPoints.length
+    const sumX = dataPoints.reduce((sum, p) => sum + p.x, 0)
+    const sumY = dataPoints.reduce((sum, p) => sum + p.y, 0)
+    const sumXY = dataPoints.reduce((sum, p) => sum + p.x * p.y, 0)
+    const sumX2 = dataPoints.reduce((sum, p) => sum + p.x * p.x, 0)
+
+    const m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+    const b = (sumY - m * sumX) / n
+
+    // Only show trend if it's improving (negative slope = times getting faster)
+    if (m >= 0) return null
+
+    return { slope: m, intercept: b, firstDate }
+  }
+
   // Create time progress chart options
   const createTimeProgressOptions = (
     data: TimeProgressData[],
     title?: string
   ): EChartsOption => {
-    const dates = data.map((d) => formatDate(d.date))
-    const times = data.map((d) => d.time_ms)
-    const minTime = Math.min(...times)
-    const maxTime = Math.max(...times)
+    // Get all unique dates
+    const allDates = [...new Set(data.map((d) => d.date))].sort()
+    const formattedDates = allDates.map(formatDate)
+
+    // Create date to index mapping
+    const dateToIndex = new Map(allDates.map((date, idx) => [date, idx]))
+
+    // Prepare data arrays for each series
+    const trainingData = new Array(allDates.length).fill(null)
+    const competitionData = new Array(allDates.length).fill(null)
+
+    // Fill data arrays
+    data.forEach((item) => {
+      const idx = dateToIndex.get(item.date)
+      if (idx === undefined) return
+
+      if (item.type === 'training') {
+        trainingData[idx] = item.time_ms
+      } else if (item.type === 'competition') {
+        competitionData[idx] = item.time_ms
+      }
+    })
+
+    // Calculate trend line
+    const trendLine = calculateTrendLine(data)
+    const trendData = new Array(allDates.length).fill(null)
+
+    if (trendLine) {
+      allDates.forEach((date, idx) => {
+        const daysSinceFirst = (new Date(date).getTime() - trendLine.firstDate) / (1000 * 60 * 60 * 24)
+        trendData[idx] = trendLine.slope * daysSinceFirst + trendLine.intercept
+      })
+    }
+
+    // Get min/max for y-axis
+    const allTimes = data.map((d) => d.time_ms)
+    const minTime = Math.min(...allTimes)
+    const maxTime = Math.max(...allTimes)
+
+    const legendData = ['Entrenamiento', 'Competencia']
+    if (trendLine) legendData.push('Tendencia')
 
     return {
       ...baseChartOptions.value,
@@ -227,9 +338,17 @@ export function useCharts() {
             },
           }
         : undefined,
+      legend: {
+        data: legendData,
+        top: title ? 30 : 10,
+        textStyle: {
+          color: colors.value.gray[600],
+          fontSize: 11,
+        },
+      },
       xAxis: {
         type: 'category',
-        data: dates,
+        data: formattedDates,
         axisLine: {
           lineStyle: { color: colors.value.gray[300] },
         },
@@ -255,22 +374,38 @@ export function useCharts() {
       tooltip: {
         ...baseChartOptions.value.tooltip,
         formatter: (params: any) => {
-          const point = Array.isArray(params) ? params[0] : params
-          const dataIndex = point.dataIndex
-          const item = data[dataIndex]
-          return `
-            <div style="font-size: 12px;">
-              <div style="font-weight: 600; margin-bottom: 4px;">${item.test_name}</div>
-              <div>Fecha: ${item.date}</div>
-              <div>Tiempo: <span style="color: ${colors.value.primary}; font-weight: 600;">${formatTime(item.time_ms)}</span></div>
-            </div>
-          `
+          const points = Array.isArray(params) ? params : [params]
+
+          // Filtrar la línea de tendencia del tooltip
+          const dataPoints = points.filter(p => p.seriesName !== 'Tendencia')
+          if (dataPoints.length === 0) return ''
+
+          const dateIdx = dataPoints[0].dataIndex
+          const date = allDates[dateIdx]
+          const items = data.filter((d) => d.date === date)
+
+          let html = `<div style="font-size: 12px;">`
+          html += `<div style="font-weight: 600; margin-bottom: 8px;">${items[0]?.test_name || ''}</div>`
+          html += `<div style="margin-bottom: 4px;">Fecha: ${date}</div>`
+
+          items.forEach((item) => {
+            if (item.type === 'training') {
+              html += `<div>Entrenamiento: <span style="color: ${colors.value.primary}; font-weight: 600;">${formatTime(item.time_ms)}</span></div>`
+            } else if (item.type === 'competition') {
+              html += `<div>Competencia: <span style="color: ${colors.value.accent}; font-weight: 600;">${formatTime(item.time_ms)}</span></div>`
+            }
+          })
+
+          html += `</div>`
+          return html
         },
       },
       series: [
+        // Training times
         {
+          name: 'Entrenamiento',
           type: 'line',
-          data: times,
+          data: trainingData,
           smooth: true,
           symbol: 'circle',
           symbolSize: 8,
@@ -283,31 +418,47 @@ export function useCharts() {
             borderColor: '#fff',
             borderWidth: 2,
           },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: `${colors.value.primary}40` },
-                { offset: 1, color: `${colors.value.primary}05` },
-              ],
-            },
+          connectNulls: false,
+        },
+        // Competition times
+        {
+          name: 'Competencia',
+          type: 'line',
+          data: competitionData,
+          smooth: true,
+          symbol: 'diamond',
+          symbolSize: 10,
+          lineStyle: {
+            color: colors.value.accent,
+            width: 3,
           },
-          markLine: times.length > 1
-            ? {
-                silent: true,
-                data: [{ type: 'min', name: 'Mejor' }],
-                lineStyle: { color: colors.value.success, type: 'dashed' },
-                label: {
-                  formatter: (params: any) => `PR: ${formatTime(params.value)}`,
+          itemStyle: {
+            color: colors.value.accent,
+            borderColor: '#fff',
+            borderWidth: 2,
+          },
+          connectNulls: false,
+        },
+        // Trend line (if available)
+        ...(trendLine
+          ? [
+              {
+                name: 'Tendencia',
+                type: 'line' as const,
+                data: trendData,
+                smooth: false,
+                symbol: 'none',
+                lineStyle: {
+                  color: colors.value.success,
+                  width: 2,
+                  type: 'dashed' as const,
+                },
+                itemStyle: {
                   color: colors.value.success,
                 },
-              }
-            : undefined,
-        },
+              },
+            ]
+          : []),
       ],
     } as EChartsOption
   }
