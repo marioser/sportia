@@ -52,6 +52,7 @@ const form = reactive<CreateAthleteForm>({
   sex: 'M',
   clubId: primaryClubId.value || '',
   photoUrl: undefined,
+  documentNumber: undefined,
 })
 
 // Set club when primaryClubId loads
@@ -111,6 +112,15 @@ const handleSubmit = async () => {
             :options="sexOptions"
             option-attribute="label"
             value-attribute="value"
+          />
+        </UFormGroup>
+
+        <UFormGroup label="Número de documento (ID nacional)" help="Usado para sincronizar resultados de competencias oficiales">
+          <UInput
+            v-model="form.documentNumber"
+            placeholder="1234567890"
+            type="text"
+            maxlength="20"
           />
         </UFormGroup>
 

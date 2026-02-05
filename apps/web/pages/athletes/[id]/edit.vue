@@ -48,6 +48,7 @@ const form = reactive<UpdateAthleteForm>({
   sex: 'M',
   photoUrl: undefined,
   active: true,
+  documentNumber: undefined,
 })
 
 // Initialize form when athlete loads
@@ -61,6 +62,7 @@ watch(
       form.sex = (athlete.sex as Sex) || 'M'
       form.photoUrl = athlete.photo_url || undefined
       form.active = athlete.active !== false
+      form.documentNumber = (athlete as any).document_number || undefined
     }
   },
   { immediate: true }
@@ -139,6 +141,15 @@ const handleSubmit = async () => {
             :options="sexOptions"
             option-attribute="label"
             value-attribute="value"
+          />
+        </UFormGroup>
+
+        <UFormGroup label="Número de documento (ID nacional)" help="Usado para sincronizar resultados de competencias oficiales">
+          <UInput
+            v-model="form.documentNumber"
+            placeholder="1234567890"
+            type="text"
+            maxlength="20"
           />
         </UFormGroup>
 

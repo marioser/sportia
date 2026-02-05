@@ -91,6 +91,7 @@ export function useAthletes() {
         sex: form.sex,
         club_id: form.clubId,
         photo_url: form.photoUrl || null,
+        document_number: form.documentNumber || null,
       }
 
       const { data, error } = await supabase
@@ -129,6 +130,7 @@ export function useAthletes() {
       if (form.sex !== undefined) update.sex = form.sex
       if (form.photoUrl !== undefined) update.photo_url = form.photoUrl || null
       if (form.active !== undefined) update.active = form.active
+      if (form.documentNumber !== undefined) update.document_number = form.documentNumber || null
 
       const { error } = await supabase
         .from('athletes')

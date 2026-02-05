@@ -95,6 +95,7 @@ export interface CreateAthleteForm {
   sex: Sex
   clubId: string
   photoUrl?: string
+  documentNumber?: string
 }
 
 export interface UpdateAthleteForm {
@@ -104,6 +105,7 @@ export interface UpdateAthleteForm {
   sex?: Sex
   photoUrl?: string
   active?: boolean
+  documentNumber?: string
 }
 
 export interface CreateClubForm {
