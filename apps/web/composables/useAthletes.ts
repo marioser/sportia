@@ -91,6 +91,7 @@ export function useAthletes() {
         sex: form.sex,
         club_id: form.clubId,
         photo_url: form.photoUrl || null,
+        document_number: form.documentNumber || null,
       }
 
       const { data, error } = await supabase
@@ -129,6 +130,7 @@ export function useAthletes() {
       if (form.sex !== undefined) update.sex = form.sex
       if (form.photoUrl !== undefined) update.photo_url = form.photoUrl || null
       if (form.active !== undefined) update.active = form.active
+      if (form.documentNumber !== undefined) update.document_number = form.documentNumber || null
 
       const { error } = await supabase
         .from('athletes')
@@ -184,6 +186,162 @@ export function useAthletes() {
     }
   }
 
+  // Get user account info for athlete (if exists)
+  const getAthleteUserAccount = async (athleteId: string) => {
+    try {
+      const config = useRuntimeConfig()
+      const user = useSupabaseUser()
+
+      if (!user.value) return null
+
+      // Get current session token
+      const { data: session } = await supabase.auth.getSession()
+      const token = session.session?.access_token
+
+      if (!token) return null
+
+      const response = await $fetch<{
+        has_account: boolean
+        user_account: {
+          userId: string
+          fullName: string
+          email: string
+          role: string
+        } | null
+      }>(`${config.public.apiUrl}/api/admin/athletes/${athleteId}/user-account`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      return response.has_account ? response.user_account : null
+    } catch (e) {
+      console.error('Error getting user account:', e)
+      return null
+    }
+  }
+
+  // Create user account for athlete
+  const createUserAccountForAthlete = async (
+    athleteId: string,
+    email: string,
+    password: string,
+    fullName: string
+  ) => {
+    loading.value = true
+    clearError()
+
+    try {
+      const config = useRuntimeConfig()
+      const { data: session } = await supabase.auth.getSession()
+      const token = session.session?.access_token
+
+      if (!token) {
+        showError('No hay sesión activa')
+        return false
+      }
+
+      await $fetch(`${config.public.apiUrl}/api/admin/athletes/create-user-account`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: {
+          athlete_id: athleteId,
+          email,
+          password,
+          full_name: fullName,
+        },
+      })
+
+      success('Cuenta de usuario creada')
+      return true
+    } catch (e: any) {
+      const message = e.data?.detail || e.message || 'Error al crear cuenta'
+      showError(message)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Update user account email
+  const updateUserEmail = async (userId: string, newEmail: string) => {
+    loading.value = true
+    clearError()
+
+    try {
+      const config = useRuntimeConfig()
+      const { data: session } = await supabase.auth.getSession()
+      const token = session.session?.access_token
+
+      if (!token) {
+        showError('No hay sesión activa')
+        return false
+      }
+
+      await $fetch(`${config.public.apiUrl}/api/admin/users/update-email`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: {
+          user_id: userId,
+          new_email: newEmail,
+        },
+      })
+
+      success('Email actualizado')
+      return true
+    } catch (e: any) {
+      const message = e.data?.detail || e.message || 'Error al actualizar email'
+      showError(message)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Update user account password
+  const updateUserPassword = async (userId: string, newPassword: string) => {
+    loading.value = true
+    clearError()
+
+    try {
+      const config = useRuntimeConfig()
+      const { data: session } = await supabase.auth.getSession()
+      const token = session.session?.access_token
+
+      if (!token) {
+        showError('No hay sesión activa')
+        return false
+      }
+
+      await $fetch(`${config.public.apiUrl}/api/admin/users/update-password`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: {
+          user_id: userId,
+          new_password: newPassword,
+        },
+      })
+
+      success('Contraseña actualizada')
+      return true
+    } catch (e: any) {
+      const message = e.data?.detail || e.message || 'Error al actualizar contraseña'
+      showError(message)
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     athletes: readonly(athletes),
     currentAthlete: readonly(currentAthlete),
@@ -194,6 +352,10 @@ export function useAthletes() {
     createAthlete,
     updateAthlete,
     deleteAthlete,
+    getAthleteUserAccount,
+    createUserAccountForAthlete,
+    updateUserEmail,
+    updateUserPassword,
     clearError,
   }
 }
