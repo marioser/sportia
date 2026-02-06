@@ -6,6 +6,9 @@ RUN pip install --no-cache-dir uv
 
 COPY apps/api/pyproject.toml ./
 
+# Aumentar timeout para descargas lentas (especialmente en CapRover)
+ENV UV_HTTP_TIMEOUT=120
+
 RUN uv pip install --system -e .
 
 COPY apps/api/app ./app
