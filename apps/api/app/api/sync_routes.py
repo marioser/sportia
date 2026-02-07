@@ -435,3 +435,57 @@ async def update_athlete_fecna_id(athlete_id: str):
     except Exception as e:
         logger.error(f"Error actualizando fecna_id: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/status/{athlete_id}")
+async def get_sync_status(athlete_id: str):
+    """
+    Obtener estado de sincronización de un atleta
+
+    Args:
+        athlete_id: UUID del atleta
+
+    Returns:
+        Estado de sincronización del atleta con FECNA
+    """
+    try:
+        supabase = create_client(settings.supabase_url, settings.supabase_key)
+
+        # Obtener mapping del atleta
+        mapping_resp = supabase.table('athlete_external_mappings')\
+            .select('*')\
+            .eq('athlete_id', athlete_id)\
+            .eq('source', 'FECNA')\
+            .execute()
+
+        if not mapping_resp.data:
+            # No tiene mapping - no está sincronizado
+            return {
+                'athlete_id': athlete_id,
+                'sync_status': 'PENDING',
+                'last_synced_at': None,
+                'results_count': 0,
+                'sync_error': None
+            }
+
+        mapping = mapping_resp.data[0]
+
+        # Contar resultados de competencia del atleta
+        results_resp = supabase.table('swim_competition_results')\
+            .select('id', count='exact')\
+            .eq('athlete_id', athlete_id)\
+            .execute()
+
+        results_count = results_resp.count or 0
+
+        return {
+            'athlete_id': athlete_id,
+            'sync_status': mapping.get('sync_status', 'SUCCESS'),
+            'last_synced_at': mapping.get('last_synced_at'),
+            'results_count': results_count,
+            'sync_error': mapping.get('sync_error')
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo estado de sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
